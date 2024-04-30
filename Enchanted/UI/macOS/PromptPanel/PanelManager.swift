@@ -11,7 +11,8 @@ import Carbon
 import AsyncAlgorithms
 
 final actor Printer {
-    func print(_ message: String) {
+    func write(_ message: String) {
+        print("clipboard printing", message)
         Clipboard.shared.setString(message)
         usleep(50000)
         Accessibility.simulatePasteCommand()
@@ -20,9 +21,10 @@ final actor Printer {
 
 class PanelManager: NSObject, NSApplicationDelegate {
     var targetApplication: NSRunningApplication?
+    var lastPrintApplication: NSRunningApplication?
     var panel: FloatingPanel!
     var completionsPanelVM = CompletionsPanelVM()
-    var allowPrinting = true
+    @MainActor var allowPrinting = true
     let printer = Printer()
     
     override init() {
@@ -36,11 +38,19 @@ class PanelManager: NSObject, NSApplicationDelegate {
     }
     
     private func handleNewMessages() async {
-        let timer = AsyncTimerSequence(interval: .seconds(0.1), clock: .suspending)
+        let timer = AsyncTimerSequence(interval: .seconds(0.1), clock: .continuous)
         for await _ in timer {
+            // If user focused different application stop writing
+            if lastPrintApplication != nil && lastPrintApplication?.localizedName != NSWorkspace.shared.runningApplications.first(where: {$0.isActive})?.localizedName {
+                // dequeue all and stop execution
+                await completionsPanelVM.cancel()
+                _ = await completionsPanelVM.sentenceQueue.dequeueAll()
+                lastPrintApplication = nil
+                continue
+            }
+            
             // hold printing until user action and ensuring that your driving experience
-            if !allowPrinting {
-                print("allowPrinting - false")
+            if await !allowPrinting {
                 continue
             }
             
@@ -50,41 +60,35 @@ class PanelManager: NSObject, NSApplicationDelegate {
                 continue
             }
             
-            // Applicaiton window was changed, cancel.
-            if targetApplication?.localizedName != NSWorkspace.shared.runningApplications.first(where: {$0.isActive})?.localizedName {
-                print("Window change detected")
-                return
-            }
-            
             print("printing: \((sentencesToConsume)) \(Date())")
-//            await Accessibility.shared.simulateTyping(for: sentencesToConsume)
-            await printer.print(sentencesToConsume)
-//            await Accessibility.shared.appleScript(for: sentencesToConsume)
+            lastPrintApplication = NSWorkspace.shared.runningApplications.first{$0.isActive}
+            await printer.write(sentencesToConsume)
         }
     }
     
     
     @MainActor
     @objc func togglePanel() {
-        if panel == nil {
+        let accessibilityStatus = Accessibility.shared.checkAccessibility()
+        if !accessibilityStatus {
             Accessibility.shared.showAccessibilityInstructionsWindow()
         }
         
         targetApplication = NSWorkspace.shared.runningApplications.first{$0.isActive}
 
         Task {
-            completionsPanelVM.selectedText = await Accessibility.shared.getSelectedText()
+            completionsPanelVM.selectedText = Accessibility.shared.getSelectedText()
             print("selected message", completionsPanelVM.selectedText as Any)
             
             if panel == nil || !panel.isVisible {
                 showPanel()
                 
                 // subscribe to keybaord event to avoid beep
-                HotkeyService.shared.registerSingleUseEscape(modifiers: []) { [weak self] in
-                    self?.hidePanel()
-                }
+//                HotkeyService.shared.registerSingleUseEscape(modifiers: []) { [weak self] in
+//                    self?.hidePanel()
+//                }
                 
-                return
+                return
             }
             
             hidePanel()

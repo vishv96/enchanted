@@ -15,6 +15,7 @@ struct CompletionsEditor: View {
     
     private func requestAccessibility() {
         Task {
+            print("Requesting accessibility")
             await Accessibility.shared.showAccessibilityInstructionsWindow()
             Accessibility.shared.simulateCopyKeyPress()
         }
@@ -32,6 +33,7 @@ struct CompletionsEditor: View {
             timer = Timer.scheduledTimer(withTimeInterval: 2, repeats: true) { _ in
                 withAnimation {
                     accessibilityStatus = Accessibility.shared.checkAccessibility()
+                    print("accessibility", accessibilityStatus)
                 }
             }
         }

@@ -24,9 +24,7 @@ final class CompletionsPanelVM {
         self.onReceiveText = onReceiveText
     }
     
-    @MainActor
-    func sendPrompt(completion: CompletionInstructionSD, model: LanguageModelSD)  {
-        guard let selectedText = selectedText, !isReady else { return }
+    static func constructPrompt(completion: CompletionInstructionSD, selectedText: String) -> String {
         var prompt = completion.instruction
         
         if prompt.contains("{{text}}") {
@@ -35,10 +33,19 @@ final class CompletionsPanelVM {
             prompt += " " + selectedText
         }
         
+        return prompt
+    }
+    
+    @MainActor
+    func sendPrompt(completion: CompletionInstructionSD, model: LanguageModelSD)  {
+        guard let selectedText = selectedText, !isReady else { return }
+        let prompt = CompletionsPanelVM.constructPrompt(completion: completion, selectedText: selectedText)
+        
         let messages: [OKChatRequestData.Message] = [
             .init(role: .user, content: prompt)
         ]
-        let request = OKChatRequestData(model: model.name, messages: messages)
+        var request = OKChatRequestData(model: model.name, messages: messages)
+        request.options = OKCompletionOptions(temperature: completion.modelTemperature ?? 0.8)
         currentMessageBuffer = ""
         messageResponse = ""
         
@@ -66,7 +73,6 @@ final class CompletionsPanelVM {
     private func handleReceive(_ response: OKChatResponse)  {
         Task {
             if let responseContent = response.message?.content {
-//                print("received: (\(responseContent))")
                 await sentenceQueue.enqueue(responseContent)
                 self.messageResponse = self.messageResponse + responseContent
             }
@@ -81,5 +87,10 @@ final class CompletionsPanelVM {
     @MainActor
     private func handleComplete() {
         print("model response ", self.messageResponse)
+    }
+    
+    @MainActor
+    func cancel() {
+        generation?.cancel()
     }
 }

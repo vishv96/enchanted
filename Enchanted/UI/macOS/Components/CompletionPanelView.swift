@@ -10,10 +10,25 @@ import SwiftUI
 import Magnet
 import WrappingHStack
 
+enum CompletionsPromptMode {
+    case completionsInCurrentWindow
+    case completionsInApp
+    
+    var next: CompletionsPromptMode {
+        switch self {
+        case .completionsInApp:
+            return .completionsInCurrentWindow
+        case .completionsInCurrentWindow:
+            return .completionsInApp
+        }
+    }
+}
+
 struct PanelCompletionsView: View {
     var completions: [CompletionInstructionSD]
-    var onClick: @MainActor (_ completion: CompletionInstructionSD, _ scheduledTyping: Bool) -> ()
-    @State var scheduledTyping = false
+    var completionInWindow: @MainActor (_ completion: CompletionInstructionSD, _ scheduledTyping: Bool) -> ()
+    var completionInApp: @MainActor (_ completion: CompletionInstructionSD) -> ()
+    @State var completionMode: CompletionsPromptMode = .completionsInApp
     @State var selectedCompletion: CompletionInstructionSD? = nil
     
     var filetedCompletions: [CompletionInstructionSD] {
@@ -22,6 +37,25 @@ struct PanelCompletionsView: View {
         }
         return completions
     }
+    
+    let customCompletionText: some View = Button(action: {}) {
+        HStack {
+            Text("TAB")
+                .textCase(.uppercase)
+                .padding(EdgeInsets(top: 4, leading: 8, bottom: 4, trailing: 8))
+                .background(Color.gray.opacity(0.2))
+                .cornerRadius(5)
+                .font(.system(size: 10, weight: .medium, design: .default))
+            
+            TextField("TAB", text: .constant("x"))
+                .font(.system(size: 12))
+        }
+        .padding(.vertical, 4)
+        .padding(.horizontal, 8)
+        .foregroundStyle(.label)
+        .background(RoundedRectangle(cornerRadius: 5).fill(.bgCustom))
+    }
+        .buttonStyle(GrowingButton())
     
     var body: some View {
         VStack(alignment: .leading) {
@@ -40,14 +74,6 @@ struct PanelCompletionsView: View {
                 
                 Spacer()
                 
-                HStack(alignment: .lastTextBaseline) {
-                    Image(systemName: "space")
-                    Text("Mode")
-                }
-                .padding(.horizontal, 8)
-                .showIf(scheduledTyping)
-                .showIf(selectedCompletion == nil)
-                
                 HStack(alignment: .firstTextBaseline) {
                     Text("Tap")
                     Image(systemName: "space")
@@ -63,22 +89,49 @@ struct PanelCompletionsView: View {
                         action: {
                             withAnimation {
                                 selectedCompletion = completion
-                                onClick(completion, scheduledTyping)
+                                switch completionMode {
+                                case .completionsInCurrentWindow:
+                                    completionInWindow(completion, false)
+                                case .completionsInApp:
+                                    completionInApp(completion)
+                                }
                             }
                         }
                     )
                     .keyboardShortcut(KeyEquivalent(completion.keyboardCharacter), modifiers: [])
                 }
             }
+            .padding(.bottom, 10)
+            
+            HStack(alignment: .center) {
+                switch completionMode {
+                case .completionsInApp:
+                    Text("Respond in **App**.")
+                case .completionsInCurrentWindow:
+                    Text("Respond in current **Window**.")
+                }
+                
+                Text("SPACE")
+                    .font(.caption2)
+                    .padding(.horizontal, 7)
+                    .padding(.vertical, 2)
+                    .background(RoundedRectangle(cornerRadius: 3).fill(.bgCustom))
+                
+                Text("to switch")
+                
+            }
+            
+            .padding(.horizontal, 8)
+            .showIf(selectedCompletion == nil)
             
         }
         .padding()
         .background {
-            RoundedRectangle(cornerRadius: 8).fill(.ultraThinMaterial)
+            RoundedRectangle(cornerRadius: 8).fill(.ultraThickMaterial)
         }
         .onKeyboardShortcut(key: .space, modifiers: []) {
             withAnimation {
-                scheduledTyping.toggle()
+                completionMode = completionMode.next
             }
         }
         .frame(minWidth: 500, maxWidth: 500)
@@ -88,7 +141,8 @@ struct PanelCompletionsView: View {
 #Preview {
     PanelCompletionsView(
         completions: CompletionInstructionSD.samples,
-        onClick: {_,_  in}
+        completionInWindow: {_,_  in},
+        completionInApp: {_ in}
     )
 }
 #endif

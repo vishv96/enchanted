@@ -7,7 +7,7 @@
 
 import SwiftUI
 
-struct Chat: View {
+struct Chat: View, Sendable {
     @State private var languageModelStore: LanguageModelStore
     @State private var conversationStore: ConversationStore
     @State private var appStore: AppStore
@@ -31,6 +31,17 @@ struct Chat: View {
     }
     
     @MainActor
+    func updateSelectedModel() {
+        if languageModelStore.selectedModel == nil {
+            if defaultOllamaModel != "" {
+                languageModelStore.setModel(modelName: defaultOllamaModel)
+            } else {
+                languageModelStore.setModel(model: languageModelStore.models.first)
+            }
+        }
+    }
+    
+    @MainActor
     func sendMessage(prompt: String, model: LanguageModelSD, image: Image?, trimmingMessageId: String?) {
         conversationStore.sendPrompt(
             userPrompt: prompt,
@@ -42,14 +53,12 @@ struct Chat: View {
     }
     
     func onConversationTap(_ conversation: ConversationSD) {
-        withAnimation(.bouncy(duration: 0.3)) {
-            Task {
-                try await conversationStore.selectConversation(conversation)
-                await languageModelStore.setModel(model: conversation.model)
-                await Haptics.shared.mediumTap()
-            }
-            showMenu.toggle()
+        Task {
+            try await conversationStore.selectConversation(conversation)
+            await languageModelStore.setModel(model: conversation.model)
+            Haptics.shared.mediumTap()
         }
+        showMenu.toggle()
     }
     
     @MainActor func onStopGenerateTap() {
@@ -75,6 +84,10 @@ struct Chat: View {
             await Haptics.shared.mediumTap()
             try? await languageModelStore.loadModels()
         }
+        
+#if os(iOS)
+        UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
+#endif
     }
     
     var body: some View {
@@ -101,6 +114,7 @@ struct Chat: View {
 #else
             SideBarStack(sidebarWidth: 300,showSidebar: $showMenu, sidebar: {
                 SidebarView(
+                    selectedConversation: conversationStore.selectedConversation,
                     conversations: conversationStore.conversations,
                     onConversationTap: onConversationTap,
                     onConversationDelete: onConversationDelete,
@@ -126,22 +140,14 @@ struct Chat: View {
         }
         .onChange(of: languageModelStore.models, { _, modelsList in
             if languageModelStore.selectedModel == nil {
-                if defaultOllamaModel != "" {
-                    languageModelStore.setModel(modelName: defaultOllamaModel)
-                } else {
-                    languageModelStore.setModel(model: languageModelStore.models.first)
-                }
+                updateSelectedModel()
             }
         })
         .onChange(of: conversationStore.selectedConversation, initial: true, { _, newConversation in
             if let conversation = newConversation {
                 languageModelStore.setModel(model: conversation.model)
             } else {
-                if defaultOllamaModel != "" {
-                    languageModelStore.setModel(modelName: defaultOllamaModel)
-                } else {
-                    languageModelStore.setModel(model: languageModelStore.models.first)
-                }
+                updateSelectedModel()
             }
         })
     }

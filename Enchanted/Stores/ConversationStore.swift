@@ -59,8 +59,8 @@ final class ConversationStore: Sendable {
     func deleteDailyConversations(_ date: Date) {
         Task {
             DispatchQueue.main.async { [self] in
-                messages = []
                 selectedConversation = nil
+                messages = []
             }
             try? await swiftDataService.deleteConversations()
             try? await loadConversations()
@@ -79,10 +79,8 @@ final class ConversationStore: Sendable {
         )
         
         DispatchQueue.main.async {
-            withAnimation(.easeInOut(duration: 0.3)) {
                 self.messages = messages
                 self.selectedConversation = selectedConversation
-            }
         }
     }
     
@@ -166,7 +164,9 @@ final class ConversationStore: Sendable {
             
             if await OllamaService.shared.ollamaKit.reachable() {
                 DispatchQueue.global(qos: .background).async {
-                    let request = OKChatRequestData(model: model.name, messages: messageHistory)
+                    var request = OKChatRequestData(model: model.name, messages: messageHistory)
+                    request.options = OKCompletionOptions(temperature: 0)
+                    
                     self.generation = OllamaService.shared.ollamaKit.chat(data: request)
                         .sink(receiveCompletion: { [weak self] completion in
                             switch completion {

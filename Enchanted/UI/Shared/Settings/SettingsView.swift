@@ -14,6 +14,7 @@ struct SettingsView: View {
     @Binding var vibrations: Bool
     @Binding var colorScheme: AppColorScheme
     @Binding var defaultOllamModel: String
+    @Binding var ollamaBearerToken: String
     @State var ollamaStatus: Bool?
     var save: () -> ()
     var checkServer: () -> ()
@@ -66,11 +67,14 @@ struct SettingsView: View {
                         .autocapitalization(.none)
 #endif
                     
-                    TextField("System prompt", text: $systemPrompt, axis: .vertical)
-                        .lineLimit(5, reservesSpace: true)
-#if os(iOS)
-                        .textFieldStyle(RoundedBorderTextFieldStyle())
-#endif
+                    VStack(alignment: .leading) {
+                        Text("System prompt")
+                        TextEditor(text: $systemPrompt)
+                            .font(.system(size: 13))
+                            .cornerRadius(4)
+                            .multilineTextAlignment(.leading)
+                            .frame(minHeight: 100)
+                    }
                     
                     Picker(selection: $defaultOllamModel) {
                         ForEach(ollamaLangugeModels, id:\.self) { model in
@@ -88,18 +92,26 @@ struct SettingsView: View {
                                 .frame(width: 24, height: 24)
                         }
                     }
+                    
+                    
+                    TextField("Bearer Token", text: $ollamaBearerToken)
+                        .disableAutocorrection(true)
+                        .textFieldStyle(RoundedBorderTextFieldStyle())
+    #if os(iOS)
+                        .autocapitalization(.none)
+    #endif
+                    
+                    Section(header: Text("APP").font(.headline).padding(.top, 20)) {
+                        
+    #if os(iOS)
+                        Toggle(isOn: $vibrations, label: {
+                            Label("Vibrations", systemImage: "water.waves")
+                                .foregroundStyle(Color.label)
+                        })
+    #endif
                 }
-                
-                Section(header: Text("APP").font(.headline).padding(.top, 20)) {
-                    
-#if os(iOS)
-                    Toggle(isOn: $vibrations, label: {
-                        Label("Vibrations", systemImage: "water.waves")
-                            .foregroundStyle(Color.label)
-                    })
-#endif
-                    
-                    
+            
+       
                     Picker(selection: $colorScheme) {
                         ForEach(AppColorScheme.allCases, id:\.self) { scheme in
                             Text(scheme.toString).tag(scheme.id)
@@ -137,10 +149,11 @@ struct SettingsView: View {
 #Preview {
     SettingsView(
         ollamaUri: .constant(""),
-        systemPrompt: .constant(""),
+        systemPrompt: .constant("You are an intelligent assistant solving complex problems. You are an intelligent assistant solving complex problems. You are an intelligent assistant solving complex problems."),
         vibrations: .constant(true),
         colorScheme: .constant(.light),
         defaultOllamModel: .constant("llama2"),
+        ollamaBearerToken: .constant("x"),
         save: {},
         checkServer: {},
         deleteAllConversations: {},
